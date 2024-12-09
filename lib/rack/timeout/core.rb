@@ -151,7 +151,7 @@ module Rack
         end
 
         # NOTE: umbrellio-patch (START): an ability to set up custom hook for thread abort exception
-        ::Rack::Timeout.__custom_config[:on_thread_abort_hooks].each { |hook| hook.call(app_thread) }
+        ::Rack::Timeout.__custom_config[:on_thread_abort_hooks].each { |hook| hook.call(app_thread, @app, env) }
         # NOTE: umbrellio-patch (END): an ability to set up custom hook for thread abort exception
 
         app_thread.raise(RequestTimeoutException.new(env), message)

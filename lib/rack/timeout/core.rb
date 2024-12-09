@@ -8,6 +8,16 @@ module Rack
   class Timeout
     include Rack::Timeout::MonotonicTime # gets us the #fsecs method
 
+    # NOTE: umbrellio-patch (START): an ability to set up custom hook for thread abort exception
+    @__custom_config = { on_thread_abort_hooks: Set.new }
+    class << self
+      attr_reader :__custom_config
+      def add_on_thread_abort_hook(&block)
+        __custom_config[:on_thread_abort_hooks] << block
+      end
+    end
+    # NOTE: umbrellio-patch (END): an ability to set up custom hook for thread abort exception
+
     module ExceptionWithEnv # shared by the following exceptions, allows them to receive the current env
       attr :env
       def initialize(env)
@@ -74,13 +84,6 @@ module Rack
       @service_past_wait = service_past_wait == "not_specified" ? ENV.fetch("RACK_TIMEOUT_SERVICE_PAST_WAIT", false).to_s != "false" : service_past_wait
 
       if @term_on_timeout && !::Process.respond_to?(:fork)
-        raise(NotImplementedError, <<-MSG)
-The platform running your application does not support forking (i.e. Windows, JVM, etc).
-
-To avoid this error, either specify RACK_TIMEOUT_TERM_ON_TIMEOUT=0 or
-leave it as default (which will have the same result).
-
-MSG
       end
       @app = app
     end
@@ -146,6 +149,10 @@ MSG
             message << ", #{Thread.main['RACK_TIMEOUT_COUNT']}/#{term_on_timeout} timeouts allowed before SIGTERM for process #{Process.pid}"
           end
         end
+
+        # NOTE: umbrellio-patch (START): an ability to set up custom hook for thread abort exception
+        ::Rack::Timeout.__custom_config[:on_thread_abort_hooks].each { |hook| hook.call(app_thread, @app, env) }
+        # NOTE: umbrellio-patch (END): an ability to set up custom hook for thread abort exception
 
         app_thread.raise(RequestTimeoutException.new(env), message)
       end

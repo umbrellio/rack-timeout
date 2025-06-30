@@ -12,7 +12,7 @@ module Rack
     #   - an ability to set up custom hook for thread abort exception
     #   - an abiltiy to set up custom timeouts per endopoint
     @__custom_config = {
-      on_thread_abort_hooks: Set.new
+      on_thread_abort_hooks: Set.new,
       per_endpoint_service_timeout: {}
     }
 

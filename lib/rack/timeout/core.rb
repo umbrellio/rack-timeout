@@ -141,7 +141,7 @@ MSG
       # NOTE: (umbrellio patch) end of OLD CODE
 
       endpoint_service_timeout = begin
-        current_path = Rack::Request.new(env).path
+        current_path = ::Rack::Request.new(env).path
         ::Rack::Timeout.__custom_config[:per_endpoint_timeout][current_path] || service_timeout
       end
 

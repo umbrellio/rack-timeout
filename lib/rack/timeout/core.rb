@@ -8,15 +8,26 @@ module Rack
   class Timeout
     include Rack::Timeout::MonotonicTime # gets us the #fsecs method
 
-    # NOTE: umbrellio-patch (START): an ability to set up custom hook for thread abort exception
-    @__custom_config = { on_thread_abort_hooks: Set.new }
+    # NOTE: umbrellio-patch (START):
+    #   - an ability to set up custom hook for thread abort exception
+    #   - an abiltiy to set up custom timeouts per endopoint
+    @__custom_config = {
+      on_thread_abort_hooks: Set.new
+      per_endpoint_service_timeout: {}
+    }
+
     class << self
       attr_reader :__custom_config
+
       def add_on_thread_abort_hook(&block)
         __custom_config[:on_thread_abort_hooks] << block
       end
+
+      def set_per_endpoint_service_timeout(endpoint, timeout)
+        __custom_config[endpoint] = timeout
+      end
     end
-    # NOTE: umbrellio-patch (END): an ability to set up custom hook for thread abort exception
+    # NOTE: umbrellio-patch (END)
 
     module ExceptionWithEnv # shared by the following exceptions, allows them to receive the current env
       attr :env
@@ -119,8 +130,18 @@ module Rack
       return @app.call(env) unless service_timeout
 
       # compute actual timeout to be used for this request; if service_past_wait is true, this is just service_timeout. If false (the default), and wait time was determined, we'll use the shortest value between seconds_service_left and service_timeout. See comment above at service_past_wait for justification.
-      info.timeout = service_timeout # nice and simple, when service_past_wait is true, not so much otherwise:
-      info.timeout = seconds_service_left if !service_past_wait && seconds_service_left && seconds_service_left > 0 && seconds_service_left < service_timeout
+
+      # NOTE: (umbrellio patch) custom per-endpoint timeouts (OLD CODE)
+      # info.timeout = service_timeout # nice and simple, when service_past_wait is true, not so much otherwise:
+      # NOTE: (umbrellio patch) end of OLD CODE
+
+      endpoint_service_timeout = begin
+        current_path = Rack::Request.new(env).path
+        ::Rack::Timeout.__custom_config[:per_endpoint_timeout][current_path] || service_timeout
+      end
+
+      info.timeout = endpoint_service_timeout
+      info.timeout = seconds_service_left if !service_past_wait && seconds_service_left && seconds_service_left > 0 && seconds_service_left < endpoint_service_timeout
       info.term    = term_on_timeout
       RT._set_state! env, :ready                            # we're good to go, but have done nothing yet
 

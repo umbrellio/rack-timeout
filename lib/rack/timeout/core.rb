@@ -13,6 +13,7 @@ module Rack
     #   - an abiltiy to set up custom timeouts per endopoint
     @__custom_config = {
       on_thread_abort_hooks: Set.new,
+      dynamic_service_timeout: nil,
       per_endpoint_service_timeout: {}
     }
 
@@ -24,7 +25,15 @@ module Rack
       end
 
       def set_per_endpoint_service_timeout(endpoint, timeout)
-        __custom_config[endpoint] = timeout
+        __custom_config[:per_endpoint_service_timeout][endpoint] = timeout
+      end
+
+      def dynamic_service_timeout(block)
+        unless block.is_a?(::Proc)
+          raise(ArgumentError, "Dynamic timeout hook should be a type of proc/lambda")
+        end
+
+        __custom_config[:dynamic_service_timeout] = block
       end
     end
     # NOTE: umbrellio-patch (END)
@@ -142,8 +151,13 @@ MSG
 
       # NOTE: (umbrellio patch) custom per-endpoint timeouts (START of patch)
       endpoint_service_timeout = begin
-        current_path = ::Rack::Request.new(env).path
-        ::Rack::Timeout.__custom_config[:per_endpoint_timeout][current_path] || service_timeout
+        req = ::Rack::Request.new(env)
+
+        if ::Rack::Timeout.__custom_config[:dynamic_service_timeout]
+          ::Rack::Timeout.__custom_config[:dynamic_service_timeout].call(req) || service_timeout
+        else
+          ::Rack::Timeout.__custom_config[:per_endpoint_service_timeout][req.path] || service_timeout
+        end
       end
 
       info.timeout = endpoint_service_timeout

@@ -149,7 +149,7 @@ MSG
       # info.timeout = service_timeout # nice and simple, when service_past_wait is true, not so much otherwise:
       # NOTE: (umbrellio patch) end of OLD CODE
 
-      # NOTE: (umbrellio patch) custom per-endpoint timeouts (START of patch)
+      # NOTE: (umbrellio patch) custom timeouts (START of patch)
       final_service_timeout = begin
         req = ::Rack::Request.new(env)
 
@@ -162,7 +162,7 @@ MSG
 
       info.timeout = final_service_timeout
       info.timeout = seconds_service_left if !service_past_wait && seconds_service_left && seconds_service_left > 0 && seconds_service_left < final_service_timeout
-      # NOTE: (umbrellio patch) custom per-endpoint timeouts (END of patch)
+      # NOTE: (umbrellio patch) custom timeouts (END of patch)
 
       info.term    = term_on_timeout
       RT._set_state! env, :ready                            # we're good to go, but have done nothing yet

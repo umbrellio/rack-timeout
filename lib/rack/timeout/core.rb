@@ -150,7 +150,7 @@ MSG
       # NOTE: (umbrellio patch) end of OLD CODE
 
       # NOTE: (umbrellio patch) custom per-endpoint timeouts (START of patch)
-      endpoint_service_timeout = begin
+      final_service_timeout = begin
         req = ::Rack::Request.new(env)
 
         if ::Rack::Timeout.__custom_config[:dynamic_service_timeout]
@@ -160,8 +160,8 @@ MSG
         end
       end
 
-      info.timeout = endpoint_service_timeout
-      info.timeout = seconds_service_left if !service_past_wait && seconds_service_left && seconds_service_left > 0 && seconds_service_left < endpoint_service_timeout
+      info.timeout = final_service_timeout
+      info.timeout = seconds_service_left if !service_past_wait && seconds_service_left && seconds_service_left > 0 && seconds_service_left < final_service_timeout
       # NOTE: (umbrellio patch) custom per-endpoint timeouts (END of patch)
 
       info.term    = term_on_timeout

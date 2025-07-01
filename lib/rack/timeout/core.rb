@@ -151,12 +151,12 @@ MSG
 
       # NOTE: (umbrellio patch) custom timeouts (START of patch)
       final_service_timeout = begin
-        req = ::Rack::Request.new(env)
+        __req = ::Rack::Request.new(env)
 
         if ::Rack::Timeout.__custom_config[:dynamic_service_timeout]
-          ::Rack::Timeout.__custom_config[:dynamic_service_timeout].call(req) || service_timeout
+          ::Rack::Timeout.__custom_config[:dynamic_service_timeout].call(__req) || service_timeout
         else
-          ::Rack::Timeout.__custom_config[:per_endpoint_service_timeout][req.path] || service_timeout
+          ::Rack::Timeout.__custom_config[:per_endpoint_service_timeout][__req.path] || service_timeout
         end
       end
 

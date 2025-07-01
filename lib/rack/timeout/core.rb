@@ -28,7 +28,7 @@ module Rack
         __custom_config[:per_endpoint_service_timeout][endpoint] = timeout
       end
 
-      def dynamic_service_timeout(block)
+      def dynamic_service_timeout=(block)
         unless block.is_a?(::Proc)
           raise(ArgumentError, "Dynamic timeout hook should be a type of proc/lambda")
         end

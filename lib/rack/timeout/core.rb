@@ -24,13 +24,49 @@ module Rack
         __custom_config[:on_thread_abort_hooks] << block
       end
 
+      # @param endpoint [String]
+      # @param timeout [Integer] in seconds
       def set_per_endpoint_service_timeout(endpoint, timeout)
         __custom_config[:per_endpoint_service_timeout][endpoint] = timeout
       end
 
-      def dynamic_service_timeout=(block)
+      # @param timeouter [Proc]
+      def dynamic_service_timeout=(timeouter)
         unless block.is_a?(::Proc)
           raise(ArgumentError, "Dynamic timeout hook should be a type of proc/lambda")
+        end
+
+        timeouter_signature = block.parameters
+        is_valid_timeouter_signature =
+          case timeouter_signature.size
+          when 2 # proc interface => request: and env: keyword attributes
+            # [[:keyreq, :request], [keyerq, :env]] or [[keyerq, :env], [:keyreq, :request]]
+            f_attr = __timeouter_signature[0]
+            s_attr = __timeouter_signature[1]
+
+            if f_attr[0] == :keyreq && (f_attr[1] == :request || f_attr[1] == :env) &&
+               s_attr[0] == :keyreq && (s_attr[1] == :request || s_attr[1] == :env)
+              true
+            else
+              false
+            end
+          when 1 # proc interface => request: or env: attribute
+            # [[:keyreq, :request]] or [[keyerq, :env]]
+            f_attr = timeouter_signature[0]
+
+            if f_attr[0] == :keyreq && (f_attr[1] == :request || f_attr[1] == :env)
+              true
+            else
+              false
+            end
+          when 0
+            true
+          else
+            false
+          end
+
+        unless is_valid_timeouter_signature
+          raise(ArgumentError, "Invalid timeouter signature. Should receive :request OR :env OR both of them OR nothing")
         end
 
         __custom_config[:dynamic_service_timeout] = block

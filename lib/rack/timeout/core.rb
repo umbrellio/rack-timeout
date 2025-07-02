@@ -154,7 +154,28 @@ MSG
         __req = ::Rack::Request.new(env)
 
         if ::Rack::Timeout.__custom_config[:dynamic_service_timeout]
-          ::Rack::Timeout.__custom_config[:dynamic_service_timeout].call(request: __req, env: env) || service_timeout
+          __dynamic_timeouter = ::Rack::Timeout.__custom_config[:dynamic_service_timeout]
+          __timeouter_signature = __dynamic_timeouter.parameters
+
+          case __timeouter_signature.size
+          when 2 # received request: and env: keyword attributes
+            # [[:keyreq, :request], [keyerq, :env]] or [[keyerq, :env], [:keyreq, :request]]
+            ::Rack::Timeout.__custom_config[:dynamic_service_timeout].call(request: __req, env: env) || service_timeout
+          when 1 # received request: or env: attribute
+            # [[:keyreq, :request]] or [[keyerq, :env]]
+            __required_attrbiute = timeouter_signature[0][1]
+
+            case __required_attrbiute
+            when :env
+              ::Rack::Timeout.__custom_config[:dynamic_service_timeout].call(env: env) || service_timeout
+            when :request
+              ::Rack::Timeout.__custom_config[:dynamic_service_timeout].call(request: __req) || service_timeout
+            end
+          when 0 # receive nothing
+            ::Rack::Timeout.__custom_config[:dynamic_service_timeout].call || service_timeout
+          else
+            raise(ArgumentError, "Invalid timeouter signature. Should receive :request OR :env OR both of them OR nothing")
+          end
         else
           ::Rack::Timeout.__custom_config[:per_endpoint_service_timeout][__req.path] || service_timeout
         end

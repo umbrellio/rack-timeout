@@ -30,46 +30,12 @@ module Rack
         __custom_config[:per_endpoint_service_timeout][endpoint] = timeout
       end
 
-      # @param timeouter [Proc]
-      def dynamic_service_timeout=(timeouter)
-        unless timeouter.is_a?(::Proc)
+      def dynamic_service_timeout=(block)
+        unless block.is_a?(::Proc)
           raise(ArgumentError, "Dynamic timeout hook should be a type of proc/lambda")
         end
 
-        timeouter_signature = timeouter.parameters
-        is_valid_timeouter_signature =
-          case timeouter_signature.size
-          when 2 # proc interface => request: and env: keyword attributes
-            # [[:keyreq, :request], [keyerq, :env]] or [[keyerq, :env], [:keyreq, :request]]
-            f_attr = __timeouter_signature[0]
-            s_attr = __timeouter_signature[1]
-
-            if f_attr[0] == :keyreq && (f_attr[1] == :request || f_attr[1] == :env) &&
-               s_attr[0] == :keyreq && (s_attr[1] == :request || s_attr[1] == :env)
-              true
-            else
-              false
-            end
-          when 1 # proc interface => request: or env: attribute
-            # [[:keyreq, :request]] or [[keyerq, :env]]
-            f_attr = timeouter_signature[0]
-
-            if f_attr[0] == :keyreq && (f_attr[1] == :request || f_attr[1] == :env)
-              true
-            else
-              false
-            end
-          when 0
-            true
-          else
-            false
-          end
-
-        unless is_valid_timeouter_signature
-          raise(ArgumentError, "Invalid timeouter signature. Should receive :request OR :env OR both of them OR nothing")
-        end
-
-        __custom_config[:dynamic_service_timeout] = timeouter
+        __custom_config[:dynamic_service_timeout] = block
       end
     end
     # NOTE: umbrellio-patch (END)
@@ -190,28 +156,7 @@ MSG
         __req = ::Rack::Request.new(env)
 
         if ::Rack::Timeout.__custom_config[:dynamic_service_timeout]
-          __dynamic_timeouter = ::Rack::Timeout.__custom_config[:dynamic_service_timeout]
-          __timeouter_signature = __dynamic_timeouter.parameters
-
-          case __timeouter_signature.size
-          when 2 # proc interface => request: and env: keyword attributes
-            # [[:keyreq, :request], [keyerq, :env]] or [[keyerq, :env], [:keyreq, :request]]
-            ::Rack::Timeout.__custom_config[:dynamic_service_timeout].call(request: __req, env: env) || service_timeout
-          when 1 # proc interface => request: or env: attribute
-            # [[:keyreq, :request]] or [[keyerq, :env]]
-            __required_attrbiute = timeouter_signature[0][1]
-
-            case __required_attrbiute
-            when :env
-              ::Rack::Timeout.__custom_config[:dynamic_service_timeout].call(env: env) || service_timeout
-            when :request
-              ::Rack::Timeout.__custom_config[:dynamic_service_timeout].call(request: __req) || service_timeout
-            end
-          when 0 # proc interface => nothing
-            ::Rack::Timeout.__custom_config[:dynamic_service_timeout].call || service_timeout
-          else
-            raise(ArgumentError, "Invalid timeouter signature. Should receive :request OR :env OR both of them OR nothing")
-          end
+          ::Rack::Timeout.__custom_config[:dynamic_service_timeout].call(__req, env) || service_timeout
         else
           ::Rack::Timeout.__custom_config[:per_endpoint_service_timeout][__req.path] || service_timeout
         end

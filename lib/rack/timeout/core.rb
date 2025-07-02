@@ -8,6 +8,38 @@ module Rack
   class Timeout
     include Rack::Timeout::MonotonicTime # gets us the #fsecs method
 
+    # NOTE: umbrellio-patch (START):
+    #   - an ability to set up custom hook for thread abort exception
+    #   - an abiltiy to set up custom timeouts per endopoint
+    @__custom_config = {
+      on_thread_abort_hooks: Set.new,
+      dynamic_service_timeout: nil,
+      per_endpoint_service_timeout: {}
+    }
+
+    class << self
+      attr_reader :__custom_config
+
+      def add_on_thread_abort_hook(&block)
+        __custom_config[:on_thread_abort_hooks] << block
+      end
+
+      # @param endpoint [String]
+      # @param timeout [Integer] in seconds
+      def set_per_endpoint_service_timeout(endpoint, timeout)
+        __custom_config[:per_endpoint_service_timeout][endpoint] = timeout
+      end
+
+      def dynamic_service_timeout=(block)
+        unless block.is_a?(::Proc)
+          raise(ArgumentError, "Dynamic timeout hook should be a type of proc/lambda")
+        end
+
+        __custom_config[:dynamic_service_timeout] = block
+      end
+    end
+    # NOTE: umbrellio-patch (END)
+
     module ExceptionWithEnv # shared by the following exceptions, allows them to receive the current env
       attr :env
       def initialize(env)
@@ -76,10 +108,8 @@ module Rack
       if @term_on_timeout && !::Process.respond_to?(:fork)
         raise(NotImplementedError, <<-MSG)
 The platform running your application does not support forking (i.e. Windows, JVM, etc).
-
 To avoid this error, either specify RACK_TIMEOUT_TERM_ON_TIMEOUT=0 or
 leave it as default (which will have the same result).
-
 MSG
       end
       @app = app
@@ -116,8 +146,26 @@ MSG
       return @app.call(env) unless service_timeout
 
       # compute actual timeout to be used for this request; if service_past_wait is true, this is just service_timeout. If false (the default), and wait time was determined, we'll use the shortest value between seconds_service_left and service_timeout. See comment above at service_past_wait for justification.
-      info.timeout = service_timeout # nice and simple, when service_past_wait is true, not so much otherwise:
-      info.timeout = seconds_service_left if !service_past_wait && seconds_service_left && seconds_service_left > 0 && seconds_service_left < service_timeout
+
+      # NOTE: (umbrellio patch) custom per-endpoint timeouts (OLD CODE)
+      # info.timeout = service_timeout # nice and simple, when service_past_wait is true, not so much otherwise:
+      # NOTE: (umbrellio patch) end of OLD CODE
+
+      # NOTE: (umbrellio patch) custom timeouts (START of patch)
+      final_service_timeout = begin
+        __req = ::Rack::Request.new(env)
+
+        if ::Rack::Timeout.__custom_config[:dynamic_service_timeout]
+          ::Rack::Timeout.__custom_config[:dynamic_service_timeout].call(__req, env) || service_timeout
+        else
+          ::Rack::Timeout.__custom_config[:per_endpoint_service_timeout][__req.path] || service_timeout
+        end
+      end
+
+      info.timeout = final_service_timeout
+      info.timeout = seconds_service_left if !service_past_wait && seconds_service_left && seconds_service_left > 0 && seconds_service_left < final_service_timeout
+      # NOTE: (umbrellio patch) custom timeouts (END of patch)
+
       info.term    = term_on_timeout
       RT._set_state! env, :ready                            # we're good to go, but have done nothing yet
 
@@ -146,6 +194,10 @@ MSG
             message << ", #{Thread.main['RACK_TIMEOUT_COUNT']}/#{term_on_timeout} timeouts allowed before SIGTERM for process #{Process.pid}"
           end
         end
+
+        # NOTE: umbrellio-patch (START): an ability to set up custom hook for thread abort exception
+        ::Rack::Timeout.__custom_config[:on_thread_abort_hooks].each { |hook| hook.call(app_thread, @app, env) }
+        # NOTE: umbrellio-patch (END): an ability to set up custom hook for thread abort exception
 
         app_thread.raise(RequestTimeoutException.new(env), message)
       end

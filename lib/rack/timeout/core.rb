@@ -32,11 +32,11 @@ module Rack
 
       # @param timeouter [Proc]
       def dynamic_service_timeout=(timeouter)
-        unless block.is_a?(::Proc)
+        unless timeouter.is_a?(::Proc)
           raise(ArgumentError, "Dynamic timeout hook should be a type of proc/lambda")
         end
 
-        timeouter_signature = block.parameters
+        timeouter_signature = timeouter.parameters
         is_valid_timeouter_signature =
           case timeouter_signature.size
           when 2 # proc interface => request: and env: keyword attributes
@@ -69,7 +69,7 @@ module Rack
           raise(ArgumentError, "Invalid timeouter signature. Should receive :request OR :env OR both of them OR nothing")
         end
 
-        __custom_config[:dynamic_service_timeout] = block
+        __custom_config[:dynamic_service_timeout] = timeouter
       end
     end
     # NOTE: umbrellio-patch (END)

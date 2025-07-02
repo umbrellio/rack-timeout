@@ -154,7 +154,7 @@ MSG
         __req = ::Rack::Request.new(env)
 
         if ::Rack::Timeout.__custom_config[:dynamic_service_timeout]
-          ::Rack::Timeout.__custom_config[:dynamic_service_timeout].call(__req) || service_timeout
+          ::Rack::Timeout.__custom_config[:dynamic_service_timeout].call(request: __req, env: env) || service_timeout
         else
           ::Rack::Timeout.__custom_config[:per_endpoint_service_timeout][__req.path] || service_timeout
         end
